@@ -1,0 +1,139 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  OFFICER
+  CANDIDATE
+  VOTER
+}
+
+enum CandidateStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum VoterStatus {
+  ELIGIBLE
+  BLOCKED
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  password_hash String
+  role          Role      @default(VOTER)
+  created_at    DateTime  @default(now())
+  
+  candidate     Candidate?
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Position {
+  id        Int       @id @default(autoincrement())
+  name      String
+  seats     Int       @default(1)
+  opens_at  DateTime
+  closes_at DateTime
+  
+  candidates Candidate[]
+  votes      Vote[]
+
+  @@map("positions")
+}
+
+model Candidate {
+  id            Int             @id @default(autoincrement())
+  user_id       Int             @unique
+  position_id   Int
+  manifesto_url String?         @db.Text
+  photo_url     String?         @db.Text
+  status        CandidateStatus @default(SUBMITTED)
+  reason        String?         @db.Text
+  created_at    DateTime        @default(now())
+
+  user     User     @relation(fields: [user_id], references: [id])
+  position Position @relation(fields: [position_id], references: [id])
+  votes    Vote[]
+
+  @@map("candidates")
+}
+
+model EligibleVoter {
+  id      Int         @id @default(autoincrement())
+  reg_no  String      @unique
+  name    String
+  email   String      @unique
+  phone   String?
+  program String?
+  status  VoterStatus @default(ELIGIBLE)
+
+  verification Verification?
+
+  @@map("eligible_voters")
+}
+
+model Verification {
+  id           Int       @id @default(autoincrement())
+  voter_id     Int       @unique
+  otp_hash     String?
+  ballot_token String?   @unique
+  issued_at    DateTime?
+  verified_at  DateTime?
+  consumed_at  DateTime?
+
+  voter EligibleVoter @relation(fields: [voter_id], references: [id])
+
+  @@map("verifications")
+}
+
+model Ballot {
+  id          Int       @id @default(autoincrement())
+  token_hash  String    @unique
+  issued_at   DateTime  @default(now())
+  consumed_at DateTime?
+
+  votes Vote[]
+
+  @@map("ballots")
+}
+
+model Vote {
+  id           Int      @id @default(autoincrement())
+  ballot_id    Int
+  position_id  Int
+  candidate_id Int
+  cast_at      DateTime @default(now())
+
+  ballot    Ballot    @relation(fields: [ballot_id], references: [id])
+  position  Position  @relation(fields: [position_id], references: [id])
+  candidate Candidate @relation(fields: [candidate_id], references: [id])
+
+  @@map("votes")
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  actor_id   Int?
+  action     String
+  entity     String?
+  entity_id  String?
+  payload    Json?
+  created_at DateTime @default(now())
+
+  actor User? @relation(fields: [actor_id], references: [id])
+
+  @@map("audit_logs")
+}
